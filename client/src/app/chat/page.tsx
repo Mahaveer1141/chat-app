@@ -10,6 +10,7 @@ interface IMessage {
   message: string;
   time: string;
   mine?: boolean;
+  images?: string[];
 }
 
 export default function Chat() {
@@ -17,12 +18,13 @@ export default function Chat() {
   const [username, setUsername] = useState("");
   const [messages, setMessages] = useState<IMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const router = useRouter();
 
   useEffect(() => {
     const username = sessionStorage.getItem("username");
     const sessionMessages = JSON.parse(
-      sessionStorage.getItem("sessionMessages") || "[]",
+      sessionStorage.getItem("sessionMessages") || "[]"
     );
     if (!username) {
       router.push("/");
@@ -46,7 +48,11 @@ export default function Chat() {
     function onChatMessage(message: IMessage) {
       setMessages((prevMessages) => {
         const newMessages = [...prevMessages, message];
-        sessionStorage.setItem("sessionMessages", JSON.stringify(newMessages));
+        const messagesToStore = newMessages.map(({ images, ...rest }) => rest);
+        sessionStorage.setItem(
+          "sessionMessages",
+          JSON.stringify(messagesToStore)
+        );
         return newMessages;
       });
     }
@@ -62,7 +68,36 @@ export default function Chat() {
     };
   }, []);
 
-  const sendMessage = (e: FormEvent<HTMLFormElement>) => {
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+    });
+  };
+
+  const handleFilesSelected = (files: File[]) => {
+    setSelectedFiles((prev) => [...prev, ...files]);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const sendMessage = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!inputMessage.trim() && selectedFiles.length === 0) {
+      return;
+    }
+
+    const images: string[] = [];
+    for (const file of selectedFiles) {
+      const base64 = await fileToBase64(file);
+      images.push(base64);
+    }
+
     const myMessage: IMessage = {
       username: username,
       message: inputMessage,
@@ -71,19 +106,26 @@ export default function Chat() {
         month: "short",
         year: "numeric",
         hour: "numeric",
-        minute: "numeric",
+        minute: "numeric"
       }),
+      images: images.length > 0 ? images : undefined
     };
+
     socket.emit("chat_message", myMessage);
 
     setMessages((prevMessages) => {
       myMessage.mine = true;
       const newMessages = [...prevMessages, myMessage];
-      sessionStorage.setItem("sessionMessages", JSON.stringify(newMessages));
+      const messagesToStore = newMessages.map(({ images, ...rest }) => rest);
+      sessionStorage.setItem(
+        "sessionMessages",
+        JSON.stringify(messagesToStore)
+      );
       return newMessages;
     });
+
     setInputMessage("");
-    e.preventDefault();
+    setSelectedFiles([]);
   };
 
   const leaveChat = () => {
@@ -121,6 +163,7 @@ export default function Chat() {
             time={message.time}
             username={message.username}
             mine={message.mine}
+            images={message.images}
           />
         ))}
       </div>
@@ -129,6 +172,9 @@ export default function Chat() {
           <Input
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
+            onFilesSelected={handleFilesSelected}
+            selectedFiles={selectedFiles}
+            onRemoveFile={handleRemoveFile}
             placeholder="Type your message..."
           />
         </form>

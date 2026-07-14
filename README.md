@@ -7,7 +7,7 @@
 - run `yarn build` or `npm run build`
 - run `yarn start` or `npm run start` to start the server
 
-server by default will be running at port 5000
+server by default will be running at port 8000
 
 ## Steps to start the client
 
